@@ -13,7 +13,7 @@ import { MailerModule } from '@nestjs-modules/mailer';
     }),
     CacheModule.register({
       isGlobal: true,
-      ttl: 300_000 // 5m
+      ttl: 600_000 // 10m
     }),
     MailerModule.forRootAsync({
       inject: [ConfigService],

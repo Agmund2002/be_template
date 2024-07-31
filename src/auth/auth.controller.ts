@@ -1,6 +1,7 @@
-import { Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, Post, Req, Res } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { EmailDto } from './dto';
+import { CodeDto, EmailDto } from './dto';
+import { Request, Response } from 'express';
 
 @Controller('/api/v1/')
 export class AuthController {
@@ -8,7 +9,17 @@ export class AuthController {
 
   @Post('/auth/signup/send-email')
   @HttpCode(200)
-  sendEmail(@Body() dto: EmailDto) {
-    return this.authService.sendEmail(dto);
+  sendEmail(@Res({ passthrough: true }) res: Response, @Body() dto: EmailDto) {
+    return this.authService.sendEmail(res, dto);
+  }
+
+  @Post('/auth/signup/code-verification')
+  @HttpCode(200)
+  codeVerification(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Body() dto: CodeDto
+  ) {
+    return this.authService.codeVerification(req, res, dto);
   }
 }
