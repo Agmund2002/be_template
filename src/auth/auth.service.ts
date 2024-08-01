@@ -99,7 +99,7 @@ export class AuthService {
       if (!email)
         throw new UnprocessableEntityException('email input step was skipped');
 
-      if (verified === 'false')
+      if (verified !== 'true')
         throw new UnauthorizedException('email not verified');
 
       const { passwordHash, ...user } = await this.prisma.user.create({
@@ -154,6 +154,36 @@ export class AuthService {
       this.logger.error('error during signin: ', error);
 
       throw new InternalServerErrorException('error during signin', error);
+    }
+  }
+
+  async refresh(req: Request, res: Response) {
+    try {
+      const { refreshToken } = req.cookies;
+
+      if (!refreshToken)
+        throw new UnauthorizedException('invalid refresh token');
+
+      const { id } = await this.jwt.verifyAsync(refreshToken);
+      if (!id) throw new UnauthorizedException('invalid refresh token');
+
+      const { passwordHash, ...user } = await this.prisma.user.findUnique({
+        where: { id }
+      });
+      if (!user) throw new UnauthorizedException('invalid refresh token');
+
+      const { accessToken, refreshToken: newRefreshToken } =
+        await this.issueTokens(user.id);
+
+      this.addRefreshTokenToResponse(res, newRefreshToken);
+
+      return { user, accessToken };
+    } catch (error) {
+      if (error instanceof UnauthorizedException) throw error;
+
+      this.logger.error('error during refresh: ', error);
+
+      throw new InternalServerErrorException('error during refresh', error);
     }
   }
 

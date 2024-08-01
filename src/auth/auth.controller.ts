@@ -38,4 +38,10 @@ export class AuthController {
   signin(@Res({ passthrough: true }) res: Response, @Body() dto: SigninDto) {
     return this.authService.signin(res, dto);
   }
+
+  @Post('/auth/refresh')
+  @HttpCode(200)
+  refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.authService.refresh(req, res);
+  }
 }
