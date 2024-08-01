@@ -187,6 +187,10 @@ export class AuthService {
     }
   }
 
+  logout(res: Response) {
+    this.removeRefreshTokenFromResponse(res);
+  }
+
   private async issueTokens(id: number) {
     const payload = { id };
 
