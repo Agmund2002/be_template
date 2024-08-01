@@ -4,10 +4,11 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  NotFoundException,
   UnauthorizedException,
   UnprocessableEntityException
 } from '@nestjs/common';
-import { CodeDto, EmailDto, SignupDto } from './dto';
+import { CodeDto, EmailDto, SigninDto, SignupDto } from './dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { MailerService } from '@nestjs-modules/mailer';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
@@ -109,18 +110,12 @@ export class AuthService {
         }
       });
 
-      const { accessToken, refreshToken } = this.issueTokens(user.id);
+      const { accessToken, refreshToken } = await this.issueTokens(user.id);
 
       res.cookie('email', '', this.setCookieOptions(new Date(0)));
       res.cookie('verified', '', this.setCookieOptions(new Date(0)));
 
-      const expiresIn = new Date();
-      expiresIn.setDate(expiresIn.getDate() + 7);
-      res.cookie(
-        'refreshToken',
-        refreshToken,
-        this.setCookieOptions(expiresIn)
-      );
+      this.addRefreshTokenToResponse(res, refreshToken);
 
       return { user, accessToken };
     } catch (error) {
@@ -137,13 +132,38 @@ export class AuthService {
     }
   }
 
-  private issueTokens(id: number) {
+  async signin(res: Response, dto: SigninDto) {
+    try {
+      const { passwordHash, ...user } = await this.prisma.user.findUnique({
+        where: { email: dto.email }
+      });
+      if (!user) throw new UnauthorizedException('credentials incorrect');
+
+      const passwordMatches = await argon.verify(passwordHash, dto.password);
+      if (!passwordMatches)
+        throw new UnauthorizedException('credentials incorrect');
+
+      const { accessToken, refreshToken } = await this.issueTokens(user.id);
+
+      this.addRefreshTokenToResponse(res, refreshToken);
+
+      return { user, accessToken };
+    } catch (error) {
+      if (error instanceof UnauthorizedException) throw error;
+
+      this.logger.error('error during signin: ', error);
+
+      throw new InternalServerErrorException('error during signin', error);
+    }
+  }
+
+  private async issueTokens(id: number) {
     const payload = { id };
 
-    const accessToken = this.jwt.sign(payload, {
+    const accessToken = await this.jwt.signAsync(payload, {
       expiresIn: '30m'
     });
-    const refreshToken = this.jwt.sign(payload, {
+    const refreshToken = await this.jwt.signAsync(payload, {
       expiresIn: '7d'
     });
 
@@ -172,5 +192,16 @@ export class AuthService {
       secure: true,
       sameSite: 'lax'
     };
+  }
+
+  private addRefreshTokenToResponse(res: Response, refreshToken: string) {
+    const expiresIn = new Date();
+    expiresIn.setDate(expiresIn.getDate() + 7);
+
+    res.cookie('refreshToken', refreshToken, this.setCookieOptions(expiresIn));
+  }
+
+  private removeRefreshTokenFromResponse(res: Response) {
+    res.cookie('refreshToken', '', this.setCookieOptions(new Date(0)));
   }
 }
